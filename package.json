@@ -1,5 +1,5 @@
 {
-  "version": "0.0.0",
+  "version": "1.0.0",
   "keywords": [],
   "type": "commonjs",
   "exports": {
@@ -65,7 +65,7 @@
     "description": "Index your content into typesense server"
   },
   "name": "strapi-typesense",
-  "description": "Index your content into typesense server",
+  "description": "Index your strapi content into typesense server",
   "license": "MIT",
   "repository": {
     "type": "git",
