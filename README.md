@@ -2,6 +2,8 @@
 
 Index your content into a Typesense server that you can then query with modules like [InstantSearch](https://github.com/algolia/instantsearch).
 
+> This is for Strapi V5 only.
+
 ## Installation
 
 ```
