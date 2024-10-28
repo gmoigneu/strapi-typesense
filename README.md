@@ -5,7 +5,7 @@ Index your content into a Typesense server that you can then query with modules 
 ## Installation
 
 ```
-yarn add gmoigneu/strapi-typesense
+yarn add strapi-typesense
 ```
 
 ## Configuration
@@ -24,7 +24,10 @@ Add the plugin configuration to your `plugins.ts` configuration file like the fo
         },
       },
       contentTypes: [
-        { name: "api::artist.artist" },
+        {
+          name: "api::artist.artist",
+          exclude: ["createdBy", "updatedBy"],
+        },
         { name: "api::event.event" },
       ],
     },
