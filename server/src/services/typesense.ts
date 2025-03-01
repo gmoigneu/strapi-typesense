@@ -64,86 +64,159 @@ export const getDocument = async (collectionName: string, documentId: string) =>
   return document;
 };
 
-const typesense = ({ strapi }: { strapi: Core.Strapi }) => ({
-  insertDocument: async (collectionName: string, documents: StrapiDocument[] ) => {
+function deletePropertyPath(obj, path) {
+  if (!obj || !path) {
+    return;
+  }
+
+  if (typeof path === "string") {
+    path = path.split(".");
+  }
+
+  for (var i = 0; i < path.length - 1; i++) {
+    obj = obj[path[i]];
+
+    if (typeof obj === "undefined") {
+      return;
+    }
+  }
+
+  delete obj[path.pop()];
+}
+
+function dateToTimestamp(object) {
+  const isoDateRegex =
+    /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{3}Z$/;
+
+  for (const property in object) {
+    if (typeof object[property] === "object") {
+      object[property] = dateToTimestamp(object[property]);
+    } else if (isoDateRegex.test(object[property])) {
+      object[property] = Math.floor(
+        new Date(object[property]).getTime() / 1000,
+      );
+    } else {
+      object[property] = object[property];
+    }
+  }
+
+  return object;
+}
+
+const prepareDocuments = (documents, type) => {
+  const contentType = strapi.contentTypes[type.name];
+
+  documents = documents.map((document) => {
+    for (const field of type.exclude) {
+      deletePropertyPath(document, field);
+    }
+    return document;
+  });
+
+  // Convert dates to unix timestamps
+  documents = documents.map((document) => {
+    return dateToTimestamp(document);
+  });
+
+  // Add id field
+  documents = documents.map((document) => {
+    document.id = document.documentId;
+    return document;
+  });
+
+  return documents;
+};
+
+const typesense = ({ strapi: strapi2 }) => ({
+  insertDocument: async (collectionName, documents) => {
     const client = await getTypesenseClient();
-
-    const config = strapi.config.get('plugin::strapi-typesense') as StrapiTypesenseConfig;
-    const excludeFields = config.contentTypes.find(ct => ct.name === collectionName)?.exclude || [];
-
-    documents = documents.map(document => {
-      excludeFields.forEach(field => {
-        delete document[field];
-      });
-      document.id = document.documentId;
-      return document;
-    });
-
-    documents.forEach(document => {
-      client.collections(collectionName).documents().create(document).then(response => {
-        strapi.log.info(`Document ${document.documentId} inserted.`);
-    }).catch(error => {
-      strapi.log.error(`Error inserting document ${JSON.stringify(document)}: ${error}`);
-    });
+    const config2 = strapi2.config.get("plugin::strapi-typesense");
+    const type = config2.contentTypes.find((ct) => ct.name === collectionName);
+    documents = prepareDocuments(documents, type);
+    documents.forEach((document) => {
+      client
+        .collections(collectionName)
+        .documents()
+        .create(document)
+        .then((response) => {
+          strapi2.log.info(`Document ${document.documentId} inserted.`);
+        })
+        .catch((error) => {
+          strapi2.log.error(
+            `Error inserting document ${JSON.stringify(document)}: ${error}`,
+          );
+        });
     });
   },
-  deleteDocuments: async (collectionName: string, documents: string[]) => {
+  deleteDocuments: async (collectionName, documents) => {
     const client = await getTypesenseClient();
-
-    documents.forEach(document => {
-      client.collections(collectionName).documents(document).delete().then(response => {
-        strapi.log.info(`Document ${document} deleted.`);
-      }).catch(error => {
-        strapi.log.error(`Error deleting document ${JSON.stringify(document)}: ${error}`);
-      });
+    documents.forEach((document) => {
+      client
+        .collections(collectionName)
+        .documents(document)
+        .delete()
+        .then((response) => {
+          strapi2.log.info(`Document ${document} deleted.`);
+        })
+        .catch((error) => {
+          strapi2.log.error(
+            `Error deleting document ${JSON.stringify(document)}: ${error}`,
+          );
+        });
     });
   },
-  indexAll: async ({ collectionName }: { collectionName: string }) => {
+  indexAll: async ({ collectionName }) => {
     const client = await getTypesenseClient();
-    strapi.log.info(`Indexing all documents for ${collectionName}.`);
+    strapi2.log.info(`Indexing all documents for ${collectionName}.`);
+    client
+      .collections(collectionName)
+      .documents()
+      .delete({ filter_by: "id:!=0" })
+      .then((response) => {
+        strapi2.log.info(`Truncate ${collectionName}.`);
+        const contentType = strapi2.contentTypes[collectionName];
+        strapi2.entityService
+          .findMany(contentType.uid, {
+            populate: "*",
+            status: "published",
+          })
+          .then((documents) => {
+            if (documents.length > 0) {
+              const config2 = strapi2.config.get("plugin::strapi-typesense");
+              const type = config2.contentTypes.find(
+                (ct) => ct.name === collectionName,
+              );
+              documents = prepareDocuments(documents, type);
 
-    client.collections(collectionName).documents().delete({'filter_by': 'id:!=0'}).then(response => {
-      strapi.log.info(`Truncate ${collectionName}.`);
-      const contentType = strapi.contentTypes[collectionName];
-      strapi.entityService.findMany(contentType.uid, {
-        populate: "*",
-        status: 'published'
-      }).then(documents => {
-        if (documents.length > 0) {
-
-          const config = strapi.config.get('plugin::strapi-typesense') as StrapiTypesenseConfig;
-          const excludeFields = config.contentTypes.find(ct => ct.name === collectionName)?.exclude || [];
-
-          // Remove excluded fields from the documents
-          documents = documents.map(doc => {
-            excludeFields.forEach(field => {
-              delete doc[field];
-            });
-            return doc;
+              client
+                .collections(collectionName)
+                .documents()
+                .import(documents)
+                .then((response2) => {
+                  strapi2.log.info(`${documents.length} documents indexed.`);
+                })
+                .catch((error) => {
+                  strapi2.log.error(`Error indexing documents: ${error}`);
+                  error.importResults.forEach((error2) => {
+                    strapi2.log.error(
+                      `Error indexing document ${error2.documentId}: ${error2.error}`,
+                    );
+                  });
+                });
+            } else {
+              strapi2.log.info(`No documents to index.`);
+            }
           });
-
-          // Import the documents
-          client.collections(collectionName).documents().import(documents.map(document => ({
-            ...document, id: document.documentId
-          })), {action: 'create'}).then(response => {
-            strapi.log.info(`${documents.length} documents indexed.`);
-          }).catch(error => {
-              strapi.log.error(`Error indexing documents: ${error}`);
-              error.importResults.forEach(error => {
-                strapi.log.error(`Error indexing document ${error.documentId}: ${error.error}`);
-              });
-            });
-        } else {
-          strapi.log.info(`No documents to index.`);
-        }
+      })
+      .catch((error) => {
+        strapi2.log.error(
+          `Error deleting collection ${collectionName}: ${error}`,
+        );
       });
-    }).catch(error => {
-      strapi.log.error(`Error deleting collection ${collectionName}: ${error}`);
-    });
   },
   createCollections: async () => {
-    checkCollections()
-  }
+    checkCollections();
+  },
 });
 
 export default typesense;
