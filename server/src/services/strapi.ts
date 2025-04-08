@@ -43,6 +43,11 @@ export const createDocument = async (
 
   for (const event of _events) {
     const strapiObject = await getStrapiObject(event, populate, hideFields) as StrapiDocument;
+
+    if (strapiObject === null) {
+      continue;
+    }
+
     if (strapiObject.publishedAt !== null) {
       objectsToSave.push({
         ...strapiObject,
