@@ -8,7 +8,7 @@ export const getStrapiObject = async (
     event: HookEvent,
     populate: any,
     hideFields: string[]
-  ) => {
+  ): Promise<StrapiDocument | null> => {
   const { model } = event;
   const modelUid = model.uid as UID.ContentType;
   const { getDocumentId, filterProperties } = utils({ strapi });
@@ -24,7 +24,7 @@ export const getStrapiObject = async (
     status: 'published',
   });
 
-  return (strapiObject) ? filterProperties(strapiObject, hideFields) : null;
+  return (strapiObject) ? filterProperties(strapiObject, hideFields) as StrapiDocument : null;
 };
 
 export const createDocument = async (
@@ -42,7 +42,7 @@ export const createDocument = async (
   const objectsToSave: StrapiDocument[] = [];
 
   for (const event of _events) {
-    const strapiObject = await getStrapiObject(event, populate, hideFields) as StrapiDocument;
+    const strapiObject = await getStrapiObject(event, populate, hideFields);
 
     if (strapiObject === null) {
       continue;
@@ -52,7 +52,7 @@ export const createDocument = async (
       objectsToSave.push({
         ...strapiObject,
         'id': idPrefix + strapiObject.documentId,
-      } as StrapiDocument);
+      });
     }
   }
 
