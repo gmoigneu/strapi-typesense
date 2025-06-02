@@ -37,16 +37,16 @@ const lifecycles = ({ strapi }: { strapi: Core.Strapi }) => ({
         // Subscribe to the afterCreate, afterUpdate, afterDelete, and afterDeleteMany events
         strapi.db?.lifecycles.subscribe({
           models: [name],
-          afterCreate: async (event) => {
-            await createDocument(
-              [event],
-              populate,
-              hideFields,
-              transformToBooleanFields,
-              prefix,
-              collectionName
-            );
-          },
+          // afterCreate: async (event) => {
+          //   await createDocument(
+          //     [event],
+          //     populate,
+          //     hideFields,
+          //     transformToBooleanFields,
+          //     prefix,
+          //     collectionName
+          //   );
+          // },
           afterDelete: async (event) => {
             await deleteDocument(
               event,
